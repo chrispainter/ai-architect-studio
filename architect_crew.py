@@ -47,6 +47,15 @@ ai_specialist = Agent(
     llm=gemini_llm
 )
 
+security_agent = Agent(
+    role='Security & Compliance Lead',
+    goal='Review the architecture, infrastructure, and AI integration for vulnerabilities, data privacy risks (GDPR/HIPAA/CCPA), and prompt injection risks.',
+    backstory='You are a paranoid but brilliant Cybersecurity Expert. You look for ways systems can be hacked, how data could leak, and ensure all AI features are safe from malicious manipulation.',
+    verbose=True,
+    allow_delegation=False,
+    llm=gemini_llm
+)
+
 # ==========================================
 # 3. ASSIGN THEIR JOBS (TASKS)
 # ==========================================
@@ -69,13 +78,19 @@ design_ai_features = Task(
     agent=ai_specialist
 )
 
+audit_security = Task(
+    description='Review the proposed architecture, infrastructure, and AI features. Identify the top 3 security or compliance risks (like prompt injection, data leaks, or regulatory issues) and how to mitigate them.',
+    expected_output='A security audit report listing 3 major risks, categorized by severity, with clear technical mitigation strategies.',
+    agent=security_agent
+)
+
 # ==========================================
 # 4. START THE WORK (THE CREW)
 # ==========================================
 
 architect_crew = Crew(
-    agents=[lead_architect, systems_engineer, ai_specialist],
-    tasks=[draft_architecture, plan_infrastructure, design_ai_features],
+    agents=[lead_architect, systems_engineer, ai_specialist, security_agent],
+    tasks=[draft_architecture, plan_infrastructure, design_ai_features, audit_security],
     process=Process.sequential 
 )
 
