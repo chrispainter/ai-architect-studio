@@ -1,0 +1,5 @@
+venv/
+__pycache__/
+.env
+blueprint_output.txt
+.DS_Store
