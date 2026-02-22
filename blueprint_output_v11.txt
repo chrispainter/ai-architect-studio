@@ -1,0 +1,1 @@
+Please enter your GITHUB_PERSONAL_ACCESS_TOKEN (for reading the codebase): Please enter the Github Repository you want the architect to analyze (e.g., 'chrispainter/claude_skills'): 

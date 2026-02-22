@@ -1,0 +1,3 @@
+Please enter your GITHUB_PERSONAL_ACCESS_TOKEN (needed to read the codebase): 
+Please enter the GITHUB_REPO_URL you want the Architect to analyze (e.g., 'chrispainter/claude_skills'): [96m
+[2026-02-21 18:20:21][0m[93m[ERROR]: [0m[91mFile not found: knowledge/knowledge_base/ux_guidelines.md. Try adding sources to the knowledge directory. If it's inside the knowledge directory, use the relative path.[0m

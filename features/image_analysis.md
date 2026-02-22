@@ -1,9 +1,8 @@
 # Feature: Image Analysis
 
 ## Description
-This feature allows users to upload images of rooms they like (e.g., kitchens, living rooms) to find active property listings with a similar visual style. The AI should be able to analyze the uploaded image and match it with images from the property database.
+This feature allows users to upload images of rooms they like (e.g., kitchens, living rooms) and find active property listings with a similar visual aesthetic. The AI should be able to analyze the style, colors, and features of the uploaded image and match them with listing photos.
 
 ## User Stories
-- As a user, I want to be able to upload a photo of a kitchen I like so that the app can show me listings with similar kitchen styles.
-- As a user, I want the image matching to focus on key stylistic elements like color palettes, materials (e.g., granite countertops, hardwood floors), and overall aesthetic (e.g., modern, rustic).
-- As a user, I want to see a gallery of visually similar listings after I upload an image.
+- As a user, I want to upload a photo of a kitchen I like so that I can find houses with a similar design.
+- As a user, I want the search results to show me properties with a high visual similarity score to my uploaded image.

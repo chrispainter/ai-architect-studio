@@ -1,9 +1,9 @@
 # Feature: Secure Profiles
 
 ## Description
-The application will provide users with secure, persistent profiles to store their preferences, search history, and personal information. The system must prioritize data privacy and security.
+This feature ensures that user data, preferences, and search history are stored securely and privately. Users should be able to create an account, log in, and have their preferences remembered across sessions and devices without compromising their personal information.
 
 ## User Stories
-- As a user, I want to be able to create an account and log in so that my search history and preferences are saved for future sessions.
-- As a user, I want my personal information (like name, email, and saved homes) to be stored securely and not shared without my consent.
-- As a user, I want the application to remember my preferences (e.g., typical number of bedrooms, preferred locations) to make future searches faster and more relevant.
+- As a user, I want to be able to create a secure account with a password so that my search history and preferences are saved.
+- As a user, I want the application to remember my previous searches and liked properties so that I can easily pick up where I left off.
+- As a user, I need to trust that my personal information (like name, email, and saved homes) is stored securely and will not be shared without my consent.
