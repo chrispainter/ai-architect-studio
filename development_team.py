@@ -1,11 +1,14 @@
-import os
 from crewai import Agent, Task, Crew, Process, LLM
-
+from crewai_tools import FileReadTool, FileWriterTool, DirectoryReadTool
 from crewai.tools import BaseTool
 from pydantic import Field
 from github import Github
 
-# Ask for the API keys if they aren't already set in the environment.
+# ==========================================
+# 1. ENVIRONMENT CONFIGURATION
+# ==========================================
+import os
+
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     api_key = input("Please enter your GOOGLE_API_KEY (it will not be saved): ").strip()
@@ -68,21 +71,36 @@ class GithubDirectoryListerTool(BaseTool):
         except Exception as e:
             return f"Error listing directory from Github: {str(e)}"
 
-# Instantiate the tools with the target repo
+# Instantiate the Github tools with the target repo
 repo_reader_tool = GithubRepoReaderTool(github_repo_name=github_repo)
 dir_lister_tool = GithubDirectoryListerTool(github_repo_name=github_repo)
+
+# Instantiate the Local File Tools for the Product Manager and Architect
+requirements_reader = FileReadTool(file_path='requirements.md')
+feature_writer = FileWriterTool()
+feature_directory_reader = DirectoryReadTool(directory='features')
 
 # ==========================================
 # 3. HIRE YOUR TEAM (AGENTS)
 # ==========================================
 
-lead_architect = Agent(
-    role='Lead Cloud Architect',
-    goal='Analyze the current codebase structure and design the high-level blueprint for a scalable, AI-integrated website application.',
-    backstory='You are a seasoned software architect. You excel at reading existing codebase structures and mapping out exactly what frontend and backend technologies are needed to build on top of them.',
+lead_product_manager = Agent(
+    role='Lead Product Manager',
+    goal='Read the raw product requirements document and break it down into strict, atomic feature files to ensure modular development.',
+    backstory='You are a methodical Product Manager who prevents scope creep. You read messy human ideas and turn them into beautifully structured, isolated feature specs.',
     verbose=True,
     allow_delegation=False,
-    tools=[repo_reader_tool, dir_lister_tool],
+    tools=[requirements_reader, feature_writer],
+    llm=gemini_llm
+)
+
+lead_architect = Agent(
+    role='Lead Cloud Architect',
+    goal='Analyze the current codebase structure and design the high-level blueprint that supports all the specified atomic product features.',
+    backstory='You are a seasoned software architect. You excel at reading existing codebase structures, reviewing isolated feature requirements, and mapping out exactly what frontend and backend technologies are needed to build them.',
+    verbose=True,
+    allow_delegation=False,
+    tools=[repo_reader_tool, dir_lister_tool, feature_directory_reader],
     llm=gemini_llm
 )
 
@@ -126,9 +144,15 @@ security_agent = Agent(
 # 4. ASSIGN THEIR JOBS (TASKS)
 # ==========================================
 
+deconstruct_requirements = Task(
+    description='1. Read the `requirements.md` file to understand the overall project.\n2. Identify the core, distinct features of the application.\n3. For each feature you identify, use your tool to create a new markdown file inside the `features/` directory (e.g., `features/conversational_search.md`). The file should contain a clear description of that specific feature and any user stories.',
+    expected_output='Multiple atomic markdown files created in the `features/` directory, one for each feature.',
+    agent=lead_product_manager
+)
+
 draft_architecture = Task(
-    description=f'1. Use your tools to list the files in the root directory of the {github_repo} repository.\n2. Read at least 2 key files (like READMEs, SKILL.md, package.json, or application code) to understand what this project is.\n3. Based on what you learn about the existing codebase AND the following project idea: {{topic}}, create a step-by-step technical blueprint explaining how to integrate the new features into the existing architecture.',
-    expected_output='A clear, bulleted blueprint document of the website architecture, explicitly incorporating context from the existing GitHub repository.',
+    description=f'1. Read all the atomic feature files in the `features/` directory to learn what we are building.\n2. Use your Github tools to list and read key files in the {github_repo} repository to understand the existing codebase.\n3. Based on the new features AND the existing codebase, create a step-by-step technical blueprint explaining how to integrate the new features into the architecture.',
+    expected_output='A clear, bulleted blueprint document of the website architecture, explicitly referencing the new features and existing codebase constraints.',
     agent=lead_architect
 )
 
@@ -160,9 +184,9 @@ design_user_experience = Task(
 # 5. START THE WORK (THE CREW)
 # ==========================================
 
-architect_crew = Crew(
-    agents=[lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent],
-    tasks=[draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security],
+development_team = Crew(
+    agents=[lead_product_manager, lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent],
+    tasks=[deconstruct_requirements, draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security],
     process=Process.sequential,
     memory=True,
     embedder={
@@ -174,12 +198,14 @@ architect_crew = Crew(
     }
 )
 
-my_website_idea = "A real estate website that helps users find homes by chatting with an AI about their lifestyle, rather than just using search filters."
+print("Starting the Development Team...")
+print("The Product Manager is reading requirements.md and breaking it into atomic feature files...")
+print("The rest of the team will then design the architecture based on those specific files.")
+print("==========================================")
 
-print("\nStarting the Architect Design Studio...\n")
-result = architect_crew.kickoff(inputs={'topic': my_website_idea})
+# Start the crew's execution
+result = development_team.kickoff()
 
-print("\n==========================================")
-print("FINAL ARCHITECT REPORT:")
+print("\n\nFINAL DEVELOPMENT TEAM REPORT:")
 print("==========================================")
 print(result)
