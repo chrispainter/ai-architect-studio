@@ -163,7 +163,15 @@ design_user_experience = Task(
 architect_crew = Crew(
     agents=[lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent],
     tasks=[draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security],
-    process=Process.sequential 
+    process=Process.sequential,
+    memory=True,
+    embedder={
+        "provider": "google-generativeai",
+        "config": {
+            "model": "models/embedding-001",
+            "api_key": api_key
+        }
+    }
 )
 
 my_website_idea = "A real estate website that helps users find homes by chatting with an AI about their lifestyle, rather than just using search filters."
