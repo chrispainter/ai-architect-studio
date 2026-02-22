@@ -32,7 +32,7 @@ if not github_repo:
 # Initialize the Gemini model
 # We are telling the agents to use Gemini Pro to do their thinking
 gemini_llm = LLM(
-    model="gemini/gemini-2.5-pro", 
+    model="gemini/gemini-3.1-pro", 
     temperature=0.4, # A lower temperature keeps the architect grounded and focused on facts
     api_key=api_key
 )
