@@ -1,12 +1,22 @@
 import os
 from crewai import Agent, Task, Crew, Process, LLM
 
-# Ask for the API key if it isn't already set in the environment.
-# This makes it easy to just run the script and paste the key!
+from crewai.tools import BaseTool
+from pydantic import Field
+from github import Github
+
+# Ask for the API keys if they aren't already set in the environment.
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     api_key = input("Please enter your GOOGLE_API_KEY (it will not be saved): ").strip()
     os.environ["GOOGLE_API_KEY"] = api_key
+
+github_token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+if not github_token:
+    github_token = input("Please enter your GITHUB_PERSONAL_ACCESS_TOKEN (needed to read the codebase): ").strip()
+    os.environ["GITHUB_PERSONAL_ACCESS_TOKEN"] = github_token
+
+github_repo = input("\nPlease enter the GITHUB_REPO_URL you want the Architect to analyze (e.g., 'chrispainter/claude_skills'): ").strip()
 
 # Initialize the Gemini model
 # We are telling the agents to use Gemini Pro to do their thinking
@@ -17,15 +27,62 @@ gemini_llm = LLM(
 )
 
 # ==========================================
-# 2. HIRE YOUR TEAM (AGENTS)
+# 2. CREATE GITHUB CODEBASE TOOL
+# ==========================================
+
+class GithubRepoReaderTool(BaseTool):
+    name: str = "Read Github Codebase File"
+    description: str = "Reads the contents of a specific file in the provided GitHub repository. Input MUST be the exact file path (e.g. 'README.md' or 'src/main.py')."
+    github_repo_name: str = Field(description="The name of the github repository to read from")
+    
+    def _run(self, file_path: str) -> str:
+        try:
+            g = Github(os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"))
+            repo = g.get_repo(self.github_repo_name)
+            file_content = repo.get_contents(file_path)
+            return file_content.decoded_content.decode('utf-8')
+        except Exception as e:
+            if "404" in str(e):
+                # If file not found, let's try to just list the directory contents to help the agent
+                try:
+                    dir_path = "/".join(file_path.split("/")[:-1])
+                    contents = repo.get_contents(dir_path)
+                    files = [f.path for f in contents]
+                    return f"Error: File '{file_path}' not found. Here are the files available in that directory: {', '.join(files)}"
+                except:
+                    return f"Error: Could not read file path '{file_path}'."
+            return f"Error reading from Github: {str(e)}"
+
+class GithubDirectoryListerTool(BaseTool):
+    name: str = "List Github Directory Contents"
+    description: str = "Lists all files and folders in a specific directory of the GitHub repository. Input should be the directory path (use '' for the root directory)."
+    github_repo_name: str = Field(description="The name of the github repository to read from")
+    
+    def _run(self, dir_path: str) -> str:
+        try:
+            g = Github(os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"))
+            repo = g.get_repo(self.github_repo_name)
+            contents = repo.get_contents(dir_path)
+            files = [f"- {f.path} ({f.type})" for f in contents]
+            return f"Contents of '{dir_path}':\n" + "\n".join(files)
+        except Exception as e:
+            return f"Error listing directory from Github: {str(e)}"
+
+# Instantiate the tools with the target repo
+repo_reader_tool = GithubRepoReaderTool(github_repo_name=github_repo)
+dir_lister_tool = GithubDirectoryListerTool(github_repo_name=github_repo)
+
+# ==========================================
+# 3. HIRE YOUR TEAM (AGENTS)
 # ==========================================
 
 lead_architect = Agent(
     role='Lead Cloud Architect',
-    goal='Design the high-level blueprint for a scalable, AI-integrated website application.',
-    backstory='You are a seasoned software architect. You excel at listening to a user concept and mapping out exactly what frontend and backend technologies are needed to build it.',
+    goal='Analyze the current codebase structure and design the high-level blueprint for a scalable, AI-integrated website application.',
+    backstory='You are a seasoned software architect. You excel at reading existing codebase structures and mapping out exactly what frontend and backend technologies are needed to build on top of them.',
     verbose=True,
     allow_delegation=False,
+    tools=[repo_reader_tool, dir_lister_tool],
     llm=gemini_llm
 )
 
@@ -66,12 +123,12 @@ security_agent = Agent(
 )
 
 # ==========================================
-# 3. ASSIGN THEIR JOBS (TASKS)
+# 4. ASSIGN THEIR JOBS (TASKS)
 # ==========================================
 
 draft_architecture = Task(
-    description='Analyze the following project idea: {topic}. Create a step-by-step technical blueprint explaining what programming languages and frameworks should be used to build it.',
-    expected_output='A clear, bulleted blueprint document of the website architecture.',
+    description=f'1. Use your tools to list the files in the root directory of the {github_repo} repository.\n2. Read at least 2 key files (like READMEs, SKILL.md, package.json, or application code) to understand what this project is.\n3. Based on what you learn about the existing codebase AND the following project idea: {{topic}}, create a step-by-step technical blueprint explaining how to integrate the new features into the existing architecture.',
+    expected_output='A clear, bulleted blueprint document of the website architecture, explicitly incorporating context from the existing GitHub repository.',
     agent=lead_architect
 )
 
@@ -100,7 +157,7 @@ design_user_experience = Task(
 )
 
 # ==========================================
-# 4. START THE WORK (THE CREW)
+# 5. START THE WORK (THE CREW)
 # ==========================================
 
 architect_crew = Crew(
