@@ -47,6 +47,15 @@ ai_specialist = Agent(
     llm=gemini_llm
 )
 
+ux_designer = Agent(
+    role='Lead UX/UI Designer',
+    goal='Design simple, clean, and intuitive user flows and interfaces that follow modern patterns for web, iOS, and Android.',
+    backstory='You are a master Product Designer obsessed with clean aesthetics and seamless user journeys. You understand exactly how modern apps should feel and look across all devices, prioritizing simplicity over complexity.',
+    verbose=True,
+    allow_delegation=False,
+    llm=gemini_llm
+)
+
 security_agent = Agent(
     role='Security & Compliance Lead',
     goal='Review the architecture, infrastructure, and AI integration for vulnerabilities, data privacy risks (GDPR/HIPAA/CCPA), and prompt injection risks.',
@@ -84,13 +93,19 @@ audit_security = Task(
     agent=security_agent
 )
 
+design_user_experience = Task(
+    description='Based on the architecture and AI features proposed, map out the 3 core screens the user will interact with (e.g., Landing Page, AI Chat Interface, Search Results). Detail the key UI components on each screen and explain the user flow between them, ensuring it works seamlessly on both mobile (iOS/Android) and web.',
+    expected_output='A detailed UX/UI flow document describing the layout, key components, and user interactions for 3 core screens.',
+    agent=ux_designer
+)
+
 # ==========================================
 # 4. START THE WORK (THE CREW)
 # ==========================================
 
 architect_crew = Crew(
-    agents=[lead_architect, systems_engineer, ai_specialist, security_agent],
-    tasks=[draft_architecture, plan_infrastructure, design_ai_features, audit_security],
+    agents=[lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent],
+    tasks=[draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security],
     process=Process.sequential 
 )
 
