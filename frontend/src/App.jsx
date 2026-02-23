@@ -6,7 +6,7 @@ import LiveTeamView from './pages/LiveTeamView';
 
 function App() {
   return (
-    <Router basename="/producteam">
+    <Router>
       <div className="app-container">
         {/* Sidebar Navigation */}
         <aside className="sidebar">
