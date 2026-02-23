@@ -9,7 +9,7 @@ uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
 
 echo "2. Starting React Vite Frontend Server..."
-export PATH=$PWD/node-v20.18.0-darwin-arm64/bin:$PATH
+export PATH=/Users/painter/.gemini/antigravity/scratch/node-v20.18.0-darwin-arm64/bin:$PATH
 cd frontend
 npm run dev -- --host &
 FRONTEND_PID=$!
