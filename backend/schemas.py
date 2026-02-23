@@ -4,6 +4,10 @@ from datetime import datetime
 
 # KnowledgeBase Schemas
 class KnowledgeBaseBase(BaseModel):
+    pm_guidelines: Optional[str] = None
+    architect_guidelines: Optional[str] = None
+    systems_guidelines: Optional[str] = None
+    ai_guidelines: Optional[str] = None
     ux_guidelines: Optional[str] = None
     security_standards: Optional[str] = None
 

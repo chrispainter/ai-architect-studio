@@ -54,8 +54,12 @@ def run_crew_for_project(project_id: int):
             req_text = "No specific requirements provided."
             
         kb = crud.get_knowledge_base(db, project_id)
-        ux_text = kb.ux_guidelines if kb and kb.ux_guidelines else "No UX guidelines."
-        security_text = kb.security_standards if kb and kb.security_standards else "No Security standards."
+        pm_text = kb.pm_guidelines if kb and kb.pm_guidelines else "None provided."
+        architect_text = kb.architect_guidelines if kb and kb.architect_guidelines else "None provided."
+        systems_text = kb.systems_guidelines if kb and kb.systems_guidelines else "None provided."
+        ai_text = kb.ai_guidelines if kb and kb.ai_guidelines else "None provided."
+        ux_text = kb.ux_guidelines if kb and kb.ux_guidelines else "None provided."
+        security_text = kb.security_standards if kb and kb.security_standards else "None provided."
 
         # Setup Environment Variables (Assumes they are loaded in the environment)
         os.environ["OPENAI_API_KEY"] = "fake-key-to-bypass-crewai-checks"
@@ -75,7 +79,7 @@ def run_crew_for_project(project_id: int):
         lead_product_manager = Agent(
             role='Lead Product Manager',
             goal='Read the raw product requirements and break it down into strict, atomic features.',
-            backstory='You are a methodical Product Manager who prevents scope creep. You read messy human ideas and turn them into beautifully structured specs.',
+            backstory=f'You are a methodical Product Manager who prevents scope creep. You read messy human ideas and turn them into beautifully structured specs.\n\nMANDATORY GUIDELINES:\n{pm_text}',
             verbose=True,
             allow_delegation=False,
             llm=gemini_llm
@@ -84,7 +88,7 @@ def run_crew_for_project(project_id: int):
         lead_architect = Agent(
             role='Lead AI Systems Architect',
             goal='Design scalable, robust, and forward-looking solutions mapping business requirements to technical architecture.',
-            backstory='You are a pragmatic, battle-tested software architect. You favor simplicity over complexity but know when to use advanced design patterns. You thoroughly analyze the existing codebase before rendering decisions. You prefer Python and Next.js.',
+            backstory=f'You are a pragmatic, battle-tested software architect. You favor simplicity over complexity but know when to use advanced design patterns. You thoroughly analyze the existing codebase before rendering decisions. You prefer Python and Next.js.\n\nMANDATORY GUIDELINES:\n{architect_text}',
             verbose=True,
             allow_delegation=True,
             tools=[repo_reader_tool, dir_lister_tool],
@@ -94,7 +98,7 @@ def run_crew_for_project(project_id: int):
         systems_engineer = Agent(
             role='Senior Systems Engineer',
             goal='Ensure the architecture translates into a solid, deployable infrastructure, focusing on databases, CI/CD, and cloud services.',
-            backstory='You live in the terminal. You believe everything should be "infrastructure as code" and despise manual deployment steps. You are deeply familiar with AWS, Docker, and Kubernetes.',
+            backstory=f'You live in the terminal. You believe everything should be "infrastructure as code" and despise manual deployment steps. You are deeply familiar with AWS, Docker, and Kubernetes.\n\nMANDATORY GUIDELINES:\n{systems_text}',
             verbose=True,
             allow_delegation=False,
             llm=gemini_llm
@@ -103,7 +107,7 @@ def run_crew_for_project(project_id: int):
         ai_specialist = Agent(
             role='AI Integration Specialist',
             goal='Identify and design the integration points for Large Language Models and other AI functionalities.',
-            backstory='You are obsessed with the latest AI models. You know the strengths and weaknesses of Gemini, Claude, and GPT-4.',
+            backstory=f'You are obsessed with the latest AI models. You know the strengths and weaknesses of Gemini, Claude, and GPT-4.\n\nMANDATORY GUIDELINES:\n{ai_text}',
             verbose=True,
             allow_delegation=False,
             llm=gemini_llm

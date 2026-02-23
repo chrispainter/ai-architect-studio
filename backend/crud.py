@@ -14,7 +14,15 @@ def create_project(db: Session, project: schemas.ProjectCreate):
     db.refresh(db_project)
     
     # Initialize an empty knowledge base
-    db_kb = models.KnowledgeBase(project_id=db_project.id, ux_guidelines="", security_standards="")
+    db_kb = models.KnowledgeBase(
+        project_id=db_project.id, 
+        pm_guidelines="", 
+        architect_guidelines="", 
+        systems_guidelines="", 
+        ai_guidelines="", 
+        ux_guidelines="", 
+        security_standards=""
+    )
     db.add(db_kb)
     db.commit()
     return db_project
@@ -33,6 +41,10 @@ def get_knowledge_base(db: Session, project_id: int):
 def update_knowledge_base(db: Session, project_id: int, kb: schemas.KnowledgeBaseBase):
     db_kb = get_knowledge_base(db, project_id)
     if db_kb:
+        db_kb.pm_guidelines = kb.pm_guidelines
+        db_kb.architect_guidelines = kb.architect_guidelines
+        db_kb.systems_guidelines = kb.systems_guidelines
+        db_kb.ai_guidelines = kb.ai_guidelines
         db_kb.ux_guidelines = kb.ux_guidelines
         db_kb.security_standards = kb.security_standards
         db.commit()

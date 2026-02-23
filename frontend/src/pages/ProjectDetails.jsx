@@ -9,6 +9,10 @@ export default function ProjectDetails() {
     const [project, setProject] = useState(null);
 
     const [requirements, setRequirements] = useState('');
+    const [pmGuidelines, setPmGuidelines] = useState('');
+    const [architectGuidelines, setArchitectGuidelines] = useState('');
+    const [systemsGuidelines, setSystemsGuidelines] = useState('');
+    const [aiGuidelines, setAiGuidelines] = useState('');
     const [uxGuidelines, setUxGuidelines] = useState('');
     const [securityStandards, setSecurityStandards] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -27,6 +31,10 @@ export default function ProjectDetails() {
                 setRequirements(res.data.requirements[res.data.requirements.length - 1].content);
             }
             if (res.data.knowledge_base) {
+                setPmGuidelines(res.data.knowledge_base.pm_guidelines || '');
+                setArchitectGuidelines(res.data.knowledge_base.architect_guidelines || '');
+                setSystemsGuidelines(res.data.knowledge_base.systems_guidelines || '');
+                setAiGuidelines(res.data.knowledge_base.ai_guidelines || '');
                 setUxGuidelines(res.data.knowledge_base.ux_guidelines || '');
                 setSecurityStandards(res.data.knowledge_base.security_standards || '');
             }
@@ -40,6 +48,10 @@ export default function ProjectDetails() {
         try {
             // Save Knowledge Base
             await api.put(`/projects/${id}/knowledge_base/`, {
+                pm_guidelines: pmGuidelines,
+                architect_guidelines: architectGuidelines,
+                systems_guidelines: systemsGuidelines,
+                ai_guidelines: aiGuidelines,
                 ux_guidelines: uxGuidelines,
                 security_standards: securityStandards
             });
@@ -113,27 +125,69 @@ export default function ProjectDetails() {
 
                 {/* Knowledge Base Section */}
                 <div className="glass-panel" style={{ padding: '2rem' }}>
-                    <h2 style={{ fontSize: '1.4rem', color: '#9066cc', marginBottom: '1.5rem' }}>Agent Knowledge Bases</h2>
+                    <h2 style={{ fontSize: '1.4rem', color: '#9066cc', marginBottom: '1.5rem' }}>Agent Handbooks</h2>
 
-                    <div className="form-group" style={{ marginBottom: '2rem' }}>
-                        <label className="form-label">UX/UI Guidelines (Lead Designer Handbook)</label>
-                        <p style={{ fontSize: '0.85rem', marginTop: '-0.3rem' }}>Mandatory aesthetic and usability rules.</p>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label className="form-label">Product Manager Guidelines</label>
                         <textarea
                             className="form-textarea"
-                            style={{ minHeight: '150px' }}
-                            placeholder="E.g. Must use Material Design, high contrast, mobile-first..."
+                            style={{ minHeight: '100px' }}
+                            placeholder="Rules for mapping features and preventing scope creep..."
+                            value={pmGuidelines}
+                            onChange={(e) => setPmGuidelines(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label className="form-label">Lead Architect Guidelines</label>
+                        <textarea
+                            className="form-textarea"
+                            style={{ minHeight: '100px' }}
+                            placeholder="Preferred tech stacks, system design patterns..."
+                            value={architectGuidelines}
+                            onChange={(e) => setArchitectGuidelines(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label className="form-label">Systems Engineer Guidelines</label>
+                        <textarea
+                            className="form-textarea"
+                            style={{ minHeight: '100px' }}
+                            placeholder="Database preferences, CI/CD pipelines, DevOps constraints..."
+                            value={systemsGuidelines}
+                            onChange={(e) => setSystemsGuidelines(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label className="form-label">AI Specialist Guidelines</label>
+                        <textarea
+                            className="form-textarea"
+                            style={{ minHeight: '100px' }}
+                            placeholder="Preferred LLMs, prompt engineering tactics, RAG strategies..."
+                            value={aiGuidelines}
+                            onChange={(e) => setAiGuidelines(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label className="form-label">UX/UI Guidelines</label>
+                        <textarea
+                            className="form-textarea"
+                            style={{ minHeight: '100px' }}
+                            placeholder="Must use Material Design, mobile-first styling..."
                             value={uxGuidelines}
                             onChange={(e) => setUxGuidelines(e.target.value)}
                         />
                     </div>
 
                     <div className="form-group">
-                        <label className="form-label">Security Standards (CISO Handbook)</label>
-                        <p style={{ fontSize: '0.85rem', marginTop: '-0.3rem' }}>Mandatory infrastructure and data privacy rules.</p>
+                        <label className="form-label">Security Standards (CISO)</label>
                         <textarea
                             className="form-textarea"
-                            style={{ minHeight: '150px' }}
-                            placeholder="E.g. Zero-Trust architecture, PII anonymization required..."
+                            style={{ minHeight: '100px' }}
+                            placeholder="Zero-Trust architecture, PII anonymization..."
                             value={securityStandards}
                             onChange={(e) => setSecurityStandards(e.target.value)}
                         />

@@ -30,6 +30,10 @@ class KnowledgeBase(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
+    pm_guidelines = Column(Text, nullable=True)
+    architect_guidelines = Column(Text, nullable=True)
+    systems_guidelines = Column(Text, nullable=True)
+    ai_guidelines = Column(Text, nullable=True)
     ux_guidelines = Column(Text, nullable=True)
     security_standards = Column(Text, nullable=True)
 
