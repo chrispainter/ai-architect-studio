@@ -9,6 +9,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(String, nullable=True)
+    github_url = Column(String, nullable=True)
     status = Column(String, default="draft")  # draft, running, completed, error
     created_at = Column(DateTime, default=datetime.utcnow)
 

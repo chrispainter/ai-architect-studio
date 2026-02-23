@@ -64,7 +64,15 @@ def run_crew_for_project(project_id: int):
         # Setup Environment Variables (Assumes they are loaded in the environment)
         os.environ["OPENAI_API_KEY"] = "fake-key-to-bypass-crewai-checks"
         api_key = os.environ.get("GOOGLE_API_KEY")
-        github_repo = os.environ.get("GITHUB_REPO_URL", "chrispainter/claude_skills")
+        
+        # Parse GitHub URL
+        github_url = project.github_url
+        if github_url and "github.com/" in github_url:
+            github_repo = github_url.split("github.com/")[-1].strip("/")
+        elif github_url:
+            github_repo = github_url.strip("/")
+        else:
+            github_repo = None
 
         gemini_llm = LLM(
             model="gemini/gemini-3.1-pro", 
@@ -72,8 +80,11 @@ def run_crew_for_project(project_id: int):
             api_key=api_key
         )
 
-        repo_reader_tool = GithubRepoReaderTool(github_repo_name=github_repo)
-        dir_lister_tool = GithubDirectoryListerTool(github_repo_name=github_repo)
+        architect_tools = []
+        if github_repo:
+            repo_reader_tool = GithubRepoReaderTool(github_repo_name=github_repo)
+            dir_lister_tool = GithubDirectoryListerTool(github_repo_name=github_repo)
+            architect_tools = [repo_reader_tool, dir_lister_tool]
 
         # Build Agents
         lead_product_manager = Agent(
@@ -88,10 +99,10 @@ def run_crew_for_project(project_id: int):
         lead_architect = Agent(
             role='Lead AI Systems Architect',
             goal='Design scalable, robust, and forward-looking solutions mapping business requirements to technical architecture.',
-            backstory=f'You are a pragmatic, battle-tested software architect. You favor simplicity over complexity but know when to use advanced design patterns. You thoroughly analyze the existing codebase before rendering decisions. You prefer Python and Next.js.\n\nMANDATORY GUIDELINES:\n{architect_text}',
+            backstory=f'You are a pragmatic, battle-tested software architect. You favor simplicity over complexity but know when to use advanced design patterns. {"You thoroughly analyze the existing codebase before rendering decisions. " if github_repo else ""}You prefer Python and Next.js.\n\nMANDATORY GUIDELINES:\n{architect_text}',
             verbose=True,
             allow_delegation=True,
-            tools=[repo_reader_tool, dir_lister_tool],
+            tools=architect_tools,
             llm=gemini_llm
         )
 
@@ -138,9 +149,16 @@ def run_crew_for_project(project_id: int):
             agent=lead_product_manager
         )
 
+        if github_repo:
+            architect_instruction = '1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. USE your Github tools to thoroughly explore the current state of the provided repository.\n3. Identify the core components required to build this system and integrate the new features.\n4. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems.'
+            architect_output = 'A comprehensive, technical blueprint of the application architecture, referencing existing code structure and integrating the new feature requests.'
+        else:
+            architect_instruction = '1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. Identify the core components required to build this system from scratch based on the requirements.\n3. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems.'
+            architect_output = 'A comprehensive, technical blueprint of the application architecture from scratch.'
+
         draft_architecture = Task(
-            description='1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. USE your Github tools to thoroughly explore the current state of the provided repository.\n3. Identify the core components required to build this system and integrate the new features.\n4. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems.',
-            expected_output='A comprehensive, technical blueprint of the application architecture, referencing existing code structure and integrating the new feature requests.',
+            description=architect_instruction,
+            expected_output=architect_output,
             agent=lead_architect
         )
 

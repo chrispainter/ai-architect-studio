@@ -8,6 +8,7 @@ export default function ProjectDashboard() {
     const [isCreating, setIsCreating] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [newDesc, setNewDesc] = useState('');
+    const [newGithub, setNewGithub] = useState('');
 
     useEffect(() => {
         fetchProjects();
@@ -26,9 +27,10 @@ export default function ProjectDashboard() {
         e.preventDefault();
         if (!newTitle.trim()) return;
         try {
-            await api.post('/projects/', { title: newTitle, description: newDesc });
+            await api.post('/projects/', { title: newTitle, description: newDesc, github_url: newGithub });
             setNewTitle('');
             setNewDesc('');
+            setNewGithub('');
             setIsCreating(false);
             fetchProjects();
         } catch (error) {
@@ -72,6 +74,17 @@ export default function ProjectDashboard() {
                                 value={newDesc}
                                 onChange={(e) => setNewDesc(e.target.value)}
                             />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">GitHub Repository URL (Optional)</label>
+                            <input
+                                type="url"
+                                className="form-input"
+                                placeholder="https://github.com/username/repo"
+                                value={newGithub}
+                                onChange={(e) => setNewGithub(e.target.value)}
+                            />
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>If provided, agents will analyze this codebase first. Otherwise, they will build an architecture from scratch.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button type="submit" className="btn btn-primary">Create Workspace</button>

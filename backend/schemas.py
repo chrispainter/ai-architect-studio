@@ -56,6 +56,7 @@ class AgentOutput(AgentOutputBase):
 class ProjectBase(BaseModel):
     title: str
     description: Optional[str] = None
+    github_url: Optional[str] = None
 
 class ProjectCreate(ProjectBase):
     pass

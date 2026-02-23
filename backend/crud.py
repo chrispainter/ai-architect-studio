@@ -8,7 +8,7 @@ def get_projects(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Project).offset(skip).limit(limit).all()
 
 def create_project(db: Session, project: schemas.ProjectCreate):
-    db_project = models.Project(title=project.title, description=project.description)
+    db_project = models.Project(title=project.title, description=project.description, github_url=project.github_url)
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
