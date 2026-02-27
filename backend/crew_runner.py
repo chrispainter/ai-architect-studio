@@ -5,8 +5,8 @@ from crewai.tools import BaseTool
 from pydantic import Field
 from github import Github
 from sqlalchemy.orm import Session
-from . import crud, models, schemas
-from .database import SessionLocal
+import crud, models, schemas
+from database import SessionLocal
 
 class GithubRepoReaderTool(BaseTool):
     name: str = "Read Github Codebase File"

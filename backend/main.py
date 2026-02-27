@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 
-from . import crud, models, schemas
-from .database import SessionLocal, engine, get_db
+import crud, models, schemas
+from database import SessionLocal, engine, get_db
 
 # Create the database tables
 models.Base.metadata.create_all(bind=engine)
@@ -57,7 +57,7 @@ def update_kb_for_project(
 def get_outputs_for_project(project_id: int, db: Session = Depends(get_db)):
     return crud.get_agent_outputs(db=db, project_id=project_id)
 
-from . import crew_runner
+import crew_runner
 
 @app.post("/projects/{project_id}/run", response_model=dict)
 def run_project_crew(project_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
