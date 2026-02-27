@@ -7,3 +7,4 @@ crewai
 crewai-tools
 langchain-google-genai
 PyGithub
+google-generativeai
