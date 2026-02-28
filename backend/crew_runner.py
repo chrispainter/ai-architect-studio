@@ -75,7 +75,7 @@ def run_crew_for_project(project_id: int):
             github_repo = None
 
         gemini_llm = LLM(
-            model="gemini/gemini-1.5-pro-latest", 
+            model="gemini/gemini-3.1-pro-preview", 
             temperature=0.4,
             api_key=api_key
         )
