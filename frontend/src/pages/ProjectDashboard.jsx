@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, FolderGit2, ArrowRight } from 'lucide-react';
+import { Plus, FolderGit2, ArrowRight, Trash2 } from 'lucide-react';
 import { api } from '../api';
 
 export default function ProjectDashboard() {
@@ -16,7 +16,7 @@ export default function ProjectDashboard() {
 
     const fetchProjects = async () => {
         try {
-            const res = await api.get('/projects/');
+            const res = await api.get('/api/v1/projects/');
             setProjects(res.data);
         } catch (error) {
             console.error("Failed to fetch projects", error);
@@ -27,7 +27,7 @@ export default function ProjectDashboard() {
         e.preventDefault();
         if (!newTitle.trim()) return;
         try {
-            await api.post('/projects/', { title: newTitle, description: newDesc, github_url: newGithub });
+            await api.post('/api/v1/projects/', { title: newTitle, description: newDesc, github_url: newGithub });
             setNewTitle('');
             setNewDesc('');
             setNewGithub('');
@@ -35,6 +35,16 @@ export default function ProjectDashboard() {
             fetchProjects();
         } catch (error) {
             console.error("Failed to create project", error);
+        }
+    };
+
+    const handleDelete = async (projectId, title) => {
+        if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+        try {
+            await api.delete(`/api/v1/projects/${projectId}`);
+            fetchProjects();
+        } catch (error) {
+            console.error("Failed to delete project", error);
         }
     };
 
@@ -106,9 +116,18 @@ export default function ProjectDashboard() {
                         <div key={project.id} className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                 <h3 className="card-title" style={{ margin: 0 }}>{project.title}</h3>
-                                <span className={`badge badge-${project.status.toLowerCase()}`}>
-                                    {project.status}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span className={`badge badge-${project.status.toLowerCase().split(':')[0]}`}>
+                                        {project.status}
+                                    </span>
+                                    <button
+                                        onClick={() => handleDelete(project.id, project.title)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+                                        title="Delete project"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </div>
                             <p style={{ flex: 1 }}>{project.description || 'No description provided.'}</p>
 

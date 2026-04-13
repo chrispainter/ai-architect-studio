@@ -25,7 +25,7 @@ export default function ProjectDetails() {
 
     const fetchProjectDetails = async () => {
         try {
-            const res = await api.get(`/projects/${id}`);
+            const res = await api.get(`/api/v1/projects/${id}`);
             setProject(res.data);
             if (res.data.requirements && res.data.requirements.length > 0) {
                 setRequirements(res.data.requirements[res.data.requirements.length - 1].content);
@@ -46,8 +46,7 @@ export default function ProjectDetails() {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // Save Knowledge Base
-            await api.put(`/projects/${id}/knowledge_base/`, {
+            await api.put(`/api/v1/projects/${id}/knowledge_base/`, {
                 pm_guidelines: pmGuidelines,
                 architect_guidelines: architectGuidelines,
                 systems_guidelines: systemsGuidelines,
@@ -56,9 +55,8 @@ export default function ProjectDetails() {
                 security_standards: securityStandards
             });
 
-            // Save Requirement
             if (requirements.trim()) {
-                await api.post(`/projects/${id}/requirements/`, {
+                await api.post(`/api/v1/projects/${id}/requirements/`, {
                     content: requirements
                 });
             }
@@ -76,11 +74,11 @@ export default function ProjectDetails() {
         await handleSave();
         setIsDeploying(true);
         try {
-            await api.post(`/projects/${id}/run`);
-            navigate(`/project/${id}/live`);
+            const res = await api.post(`/api/v1/projects/${id}/runs`);
+            navigate(`/project/${id}/live/${res.data.id}`);
         } catch (error) {
             console.error("Error running team", error);
-            alert("Failed to start the AI team.");
+            alert(error.response?.data?.detail || "Failed to start the AI team.");
             setIsDeploying(false);
         }
     };
@@ -101,10 +99,34 @@ export default function ProjectDetails() {
                     </button>
                     <button className="btn btn-primary" onClick={handleDeploy} disabled={isDeploying}>
                         <Play size={18} />
-                        {isDeploying ? 'Deploying...' : 'Deploy Team'}
+                        {isDeploying ? 'Starting Run...' : 'Start Run'}
                     </button>
                 </div>
             </div>
+
+            {/* Run History */}
+            {project.crew_runs && project.crew_runs.length > 0 && (
+                <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--accent-primary)' }}>Run History</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {project.crew_runs.map(run => (
+                            <div
+                                key={run.id}
+                                onClick={() => navigate(`/project/${id}/live/${run.id}`)}
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-tertiary)', cursor: 'pointer' }}
+                            >
+                                <span style={{ fontSize: '0.85rem' }}>Run #{run.id}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                        {run.started_at ? new Date(run.started_at).toLocaleString() : 'Queued'}
+                                    </span>
+                                    <span className={`badge badge-${run.status}`}>{run.status}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                 {/* Requirements Section */}

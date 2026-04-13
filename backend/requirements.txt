@@ -8,3 +8,8 @@ crewai-tools
 langchain-google-genai
 PyGithub
 google-generativeai
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+websockets
+pydantic[email]
