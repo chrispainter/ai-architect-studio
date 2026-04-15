@@ -13,3 +13,4 @@ passlib[bcrypt]
 python-multipart
 websockets
 pydantic[email]
+psycopg2-binary
