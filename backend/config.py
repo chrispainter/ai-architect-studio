@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Stitch MCP (Phase 2)
     stitch_api_key: str = ""
+    stitch_mcp_url: str = "https://stitch.googleapis.com/mcp"
 
     # n8n (Phase 4)
     n8n_base_url: str = ""

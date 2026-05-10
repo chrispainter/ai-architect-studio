@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api';
+import DesignPreview from '../components/DesignPreview';
 
 // In dev, Vite proxy forwards /ws to backend. In prod, nginx does the same.
 // So we connect relative to the current host.
@@ -48,6 +49,7 @@ export default function LiveTeamView() {
                             agent_name: msg.agent_name,
                             task_name: msg.task_name,
                             output_content: msg.output_content,
+                            artifact_type: msg.artifact_type ?? null,
                         }]);
                     } else if (msg.type === 'status') {
                         setRunStatus(msg.status);
@@ -184,9 +186,13 @@ export default function LiveTeamView() {
                                     Task: {output.task_name}
                                 </span>
                             </div>
-                            <div className="markdown-body">
-                                <ReactMarkdown>{output.output_content}</ReactMarkdown>
-                            </div>
+                            {output.artifact_type === 'stitch_design' ? (
+                                <DesignPreview output={output} />
+                            ) : (
+                                <div className="markdown-body">
+                                    <ReactMarkdown>{output.output_content}</ReactMarkdown>
+                                </div>
+                            )}
                         </div>
                     ))}
 
