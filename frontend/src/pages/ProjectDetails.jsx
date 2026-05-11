@@ -83,6 +83,19 @@ export default function ProjectDetails() {
         }
     };
 
+    const handleToggleDiscovery = async (enabled) => {
+        // Optimistic update for snappy UX; revert if the PUT fails
+        const prev = project;
+        setProject(p => p ? { ...p, discovery_enabled: enabled } : p);
+        try {
+            await api.put(`/api/v1/projects/${id}`, { discovery_enabled: enabled });
+        } catch (error) {
+            console.error("Failed to toggle discovery", error);
+            setProject(prev);
+            alert("Couldn't update the discovery setting. Please try again.");
+        }
+    };
+
     if (!project) return <div>Loading...</div>;
 
     return (
@@ -102,6 +115,23 @@ export default function ProjectDetails() {
                         {isDeploying ? 'Starting Run...' : 'Start Run'}
                     </button>
                 </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                    <input
+                        type="checkbox"
+                        checked={project.discovery_enabled !== false}
+                        onChange={(e) => handleToggleDiscovery(e.target.checked)}
+                        style={{ marginTop: '0.25rem', cursor: 'pointer' }}
+                    />
+                    <span>
+                        <span style={{ fontWeight: 500 }}>Run market discovery before requirements</span>
+                        <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                            Adds a Market Researcher agent that produces ICP, market sizing (TAM/SAM/SOM), competitive landscape, and an opportunity tree before the PM decomposes requirements. Adds ~2–3 minutes per run.
+                        </span>
+                    </span>
+                </label>
             </div>
 
             {/* Run History */}

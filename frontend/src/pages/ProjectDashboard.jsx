@@ -9,6 +9,7 @@ export default function ProjectDashboard() {
     const [newTitle, setNewTitle] = useState('');
     const [newDesc, setNewDesc] = useState('');
     const [newGithub, setNewGithub] = useState('');
+    const [newDiscoveryEnabled, setNewDiscoveryEnabled] = useState(true);
 
     useEffect(() => {
         fetchProjects();
@@ -27,10 +28,16 @@ export default function ProjectDashboard() {
         e.preventDefault();
         if (!newTitle.trim()) return;
         try {
-            await api.post('/api/v1/projects/', { title: newTitle, description: newDesc, github_url: newGithub });
+            await api.post('/api/v1/projects/', {
+                title: newTitle,
+                description: newDesc,
+                github_url: newGithub,
+                discovery_enabled: newDiscoveryEnabled,
+            });
             setNewTitle('');
             setNewDesc('');
             setNewGithub('');
+            setNewDiscoveryEnabled(true);
             setIsCreating(false);
             fetchProjects();
         } catch (error) {
@@ -95,6 +102,22 @@ export default function ProjectDashboard() {
                                 onChange={(e) => setNewGithub(e.target.value)}
                             />
                             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>If provided, agents will analyze this codebase first. Otherwise, they will build an architecture from scratch.</p>
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={newDiscoveryEnabled}
+                                    onChange={(e) => setNewDiscoveryEnabled(e.target.checked)}
+                                    style={{ marginTop: '0.25rem', cursor: 'pointer' }}
+                                />
+                                <span>
+                                    <span style={{ fontWeight: 500 }}>Run market discovery first</span>
+                                    <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                                        Adds a Market Researcher agent that produces ICP, market sizing (TAM/SAM/SOM), competitive landscape, and an opportunity tree before requirements decomposition. Adds ~2–3 minutes to the crew run.
+                                    </span>
+                                </span>
+                            </label>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button type="submit" className="btn btn-primary">Create Workspace</button>

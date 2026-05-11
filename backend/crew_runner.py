@@ -13,6 +13,8 @@ from websocket import manager
 
 UX_AGENT_ROLE = "Lead UX/UI Designer"
 STITCH_ARTIFACT_TYPE = "stitch_design"
+RESEARCHER_AGENT_ROLE = "Market Discovery Researcher"
+MARKET_RESEARCH_ARTIFACT_TYPE = "market_research"
 
 
 class GithubRepoReaderTool(BaseTool):
@@ -44,6 +46,56 @@ class GithubDirectoryListerTool(BaseTool):
             return f"Contents of '{dir_path}':\n" + "\n".join(files)
         except Exception as e:
             return f"Error listing directory from Github: {str(e)}"
+
+
+class WebResearchTool(BaseTool):
+    """Grounded web search powered by Gemini + Google Search.
+
+    Uses the `google.genai` SDK's GoogleSearch tool so the model retrieves and
+    cites real-time web content. The Market Researcher calls this multiple times
+    per crew run to investigate different angles (market sizing, competitors,
+    customer behaviour, regulatory landscape, etc.).
+    """
+
+    name: str = "Web Research"
+    description: str = (
+        "Search the web for current information about markets, customers, competitors, "
+        "and industry trends. Returns a grounded answer with citations to real URLs. "
+        "Use focused, specific queries — one topic per call (e.g. 'TAM for US "
+        "subcontractor invoicing software 2025'). Call this tool multiple times to "
+        "triangulate different angles of a research question."
+    )
+
+    def _run(self, query: str) -> str:
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+            response = client.models.generate_content(
+                model="gemini-3.1-pro-preview",
+                contents=query,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            text = (response.text or "").strip() or "(no answer returned)"
+            citations: list[str] = []
+            try:
+                gm = response.candidates[0].grounding_metadata
+                for chunk in (gm.grounding_chunks or []):
+                    web = getattr(chunk, "web", None)
+                    uri = getattr(web, "uri", None) if web else None
+                    if uri:
+                        title = (getattr(web, "title", "") or "").strip()
+                        citations.append(f"- {title}: {uri}" if title else f"- {uri}")
+            except (AttributeError, IndexError):
+                pass
+            if citations:
+                # Cap at 10 to keep tool output bounded
+                return f"{text}\n\nSources:\n" + "\n".join(citations[:10])
+            return text
+        except Exception as e:
+            return f"Web research failed: {type(e).__name__}: {str(e)}"
 
 
 def _enter_stitch_adapter(stack: ExitStack, settings) -> list:
@@ -147,12 +199,107 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             dir_lister_tool = GithubDirectoryListerTool(github_repo_name=github_repo)
             architect_tools = [repo_reader_tool, dir_lister_tool]
 
+        # Phase 3a: market discovery toggle. Defaults to True if the column
+        # hasn't migrated yet (getattr fallback) so legacy code paths still work.
+        discovery_enabled = bool(getattr(project, "discovery_enabled", True))
+
         # Stitch MCP adapter (Phase 2) — lifecycle managed via ExitStack so it's
         # cleanly torn down even if kickoff raises. When STITCH_API_KEY is unset
         # the UX agent falls back to the original text-critique behaviour.
         with ExitStack() as stack:
             stitch_tools = _enter_stitch_adapter(stack, settings)
             stitch_enabled = bool(stitch_tools)
+
+            # Phase 3a: optional Market Discovery Researcher agent (runs first).
+            market_researcher = None
+            market_research_task = None
+            if discovery_enabled:
+                market_researcher = Agent(
+                    role=RESEARCHER_AGENT_ROLE,
+                    goal=(
+                        "Investigate the market, target customers, and competitive landscape for "
+                        "the proposed product. Produce a structured discovery brief that downstream "
+                        "agents will use to make grounded scope, architecture, and security decisions."
+                    ),
+                    backstory=(
+                        "You are a former Forrester/Gartner analyst turned product strategist. "
+                        "You operate in the Teresa Torres continuous discovery tradition: every "
+                        "requirement must trace to a named customer opportunity, every opportunity "
+                        "must trace to a real market signal. You are skeptical of unsourced claims "
+                        "and you size markets honestly — including admitting when an answer is "
+                        "'this is a niche.' You always cite specific sources."
+                    ),
+                    verbose=True,
+                    allow_delegation=False,
+                    tools=[WebResearchTool()],
+                    llm=gemini_llm,
+                )
+
+                market_research_task = Task(
+                    description=(
+                        f"Conduct deep market discovery for the following proposed product:\n\n"
+                        f"=== Raw requirements / brief ===\n{req_text}\n\n"
+                        "Use the Web Research tool repeatedly to investigate (one focused query per "
+                        "call):\n"
+                        "  1. Target customers — who experiences the problem most acutely? What are "
+                        "     their demographics, behaviours, and current alternatives?\n"
+                        "  2. Market sizing — TAM, SAM, and SOM with cited sources. Be honest about "
+                        "     niche markets.\n"
+                        "  3. Competitive landscape — 3-5 closest competitors, their positioning, "
+                        "     and the gaps they leave.\n"
+                        "  4. Customer jobs-to-be-done — what hire criteria would make someone "
+                        "     switch from the status quo?\n"
+                        "  5. Regulatory / compliance landscape — anything (GDPR, HIPAA, SOC2, "
+                        "     industry-specific) that affects how this product must be built?\n"
+                        "  6. Mobile vs. desktop usage patterns in this market — does the primary "
+                        "     persona work primarily on mobile, desktop, or both?\n\n"
+                        "Then synthesize an opportunity tree in the Teresa Torres tradition: a top-"
+                        "level outcome, customer opportunities as branches (with evidence), and "
+                        "candidate solutions as leaves.\n\n"
+                        "Return your final answer as a SINGLE JSON object with this exact shape "
+                        "(no markdown fences, no prose around it):\n"
+                        "{\n"
+                        '  "icp": {\n'
+                        '    "primary_persona": "<one paragraph>",\n'
+                        '    "alternative_personas": ["<paragraph each>"],\n'
+                        '    "jobs_to_be_done": [\n'
+                        '      {"job": "<verb-noun statement>", "current_alternative": "<status quo>", "trigger": "<what makes them switch>"}\n'
+                        "    ]\n"
+                        "  },\n"
+                        '  "market_sizing": {\n'
+                        '    "tam": "<size + source>",\n'
+                        '    "sam": "<size + source>",\n'
+                        '    "som": "<size + source>",\n'
+                        '    "growth_rate": "<CAGR + source>",\n'
+                        '    "notes": "<caveats and assumptions>"\n'
+                        "  },\n"
+                        '  "competitive_landscape": [\n'
+                        '    {"name": "<competitor>", "positioning": "<their pitch>", "weakness": "<gap we exploit>", "url": "<homepage>"}\n'
+                        "  ],\n"
+                        '  "opportunity_tree": {\n'
+                        '    "outcome": "<top-level business outcome>",\n'
+                        '    "opportunities": [\n'
+                        "      {\n"
+                        '        "name": "<customer opportunity>",\n'
+                        '        "evidence": "<citation/quote>",\n'
+                        '        "sub_opportunities": ["<branches>"],\n'
+                        '        "candidate_solutions": ["<leaves>"]\n'
+                        "      }\n"
+                        "    ]\n"
+                        "  },\n"
+                        '  "key_insights_for_architecture": [\n'
+                        '    "<one bullet per cross-cutting decision: mobile-first? hardware? offline? compliance regime? scale tier? integration priorities?>"\n'
+                        "  ],\n"
+                        '  "citations": ["<url>", ...]\n'
+                        "}"
+                    ),
+                    expected_output=(
+                        "A single JSON object documenting the ICP/JTBD, market sizing (TAM/SAM/SOM), "
+                        "competitive landscape, opportunity tree, key insights for architecture, and "
+                        "a citations list."
+                    ),
+                    agent=market_researcher,
+                )
 
             # Build Agents
             lead_product_manager = Agent(
@@ -216,17 +363,53 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             )
 
             # Build Tasks
+            if discovery_enabled:
+                pm_description = (
+                    "FIRST, carefully read the Market Discovery Researcher's output (it precedes "
+                    "your task). Map each candidate feature to one or more opportunities from the "
+                    "opportunity tree. Prioritize features that address the highest-evidence "
+                    "opportunities and the primary persona's top jobs-to-be-done. Reject scope "
+                    "that doesn't trace to a real customer job.\n\n"
+                    f"THEN analyze the following raw product requirements:\n{req_text}\n\n"
+                    "Identify the core, distinct features of the application and create a "
+                    "structured breakdown. For each feature, note which opportunity (by name) it "
+                    "addresses."
+                )
+                pm_expected = (
+                    "A structured markdown document listing each atomic feature with: its user "
+                    "stories, the opportunity from the discovery tree it serves, and which JTBD "
+                    "it advances."
+                )
+            else:
+                pm_description = (
+                    f"Analyze the following raw product requirements:\n{req_text}\n\n"
+                    "Identify the core, distinct features of the application and create a "
+                    "structured breakdown."
+                )
+                pm_expected = "A structured markdown document listing each atomic feature and its core user stories."
+
             deconstruct_requirements = Task(
-                description=f"Analyze the following raw product requirements:\n{req_text}\n\nIdentify the core, distinct features of the application and create a structured breakdown.",
-                expected_output="A structured markdown document listing each atomic feature and its core user stories.",
+                description=pm_description,
+                expected_output=pm_expected,
                 agent=lead_product_manager,
             )
 
+            discovery_preamble = (
+                "FIRST, read the Market Researcher's `key_insights_for_architecture` array and "
+                "the primary persona from the ICP. Use those insights to drive form-factor "
+                "(mobile-first vs. desktop vs. hardware), infrastructure scale, integration "
+                "priorities, and security tier. Cite the insight you are acting on for each "
+                "major architectural decision.\n\nTHEN: "
+                if discovery_enabled
+                else ""
+            )
             if github_repo:
-                architect_instruction = "1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. USE your Github tools to thoroughly explore the current state of the provided repository.\n3. Identify the core components required to build this system and integrate the new features.\n4. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems."
+                architect_instruction = (discovery_preamble +
+                    "1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. USE your Github tools to thoroughly explore the current state of the provided repository.\n3. Identify the core components required to build this system and integrate the new features.\n4. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems.")
                 architect_output = "A comprehensive, technical blueprint of the application architecture, referencing existing code structure and integrating the new feature requests."
             else:
-                architect_instruction = "1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. Identify the core components required to build this system from scratch based on the requirements.\n3. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems."
+                architect_instruction = (discovery_preamble +
+                    "1. READ the feature breakdown produced by the Product Manager to understand the scope.\n2. Identify the core components required to build this system from scratch based on the requirements.\n3. Draft a high-level architecture diagram (text-based or Mermaid) showing the relations between systems.")
                 architect_output = "A comprehensive, technical blueprint of the application architecture from scratch."
 
             draft_architecture = Task(
@@ -289,9 +472,16 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             )
 
             # Start Execution
+            crew_agents = [lead_product_manager, lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent]
+            crew_tasks = [deconstruct_requirements, draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security]
+            if discovery_enabled and market_researcher and market_research_task:
+                # Researcher runs first so PM + Architect can consume its output via memory
+                crew_agents.insert(0, market_researcher)
+                crew_tasks.insert(0, market_research_task)
+
             development_team = Crew(
-                agents=[lead_product_manager, lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent],
-                tasks=[deconstruct_requirements, draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security],
+                agents=crew_agents,
+                tasks=crew_tasks,
                 process=Process.sequential,
                 memory=True,
                 embedder={
@@ -309,11 +499,13 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             # Save Outputs to Database
             for task in development_team.tasks:
                 output_content = task.output.raw if task.output else "No output"
-                artifact_type = (
-                    STITCH_ARTIFACT_TYPE
-                    if stitch_enabled and task.agent.role == UX_AGENT_ROLE
-                    else None
-                )
+                role = task.agent.role
+                if stitch_enabled and role == UX_AGENT_ROLE:
+                    artifact_type = STITCH_ARTIFACT_TYPE
+                elif discovery_enabled and role == RESEARCHER_AGENT_ROLE:
+                    artifact_type = MARKET_RESEARCH_ARTIFACT_TYPE
+                else:
+                    artifact_type = None
                 output = schemas.AgentOutputCreate(
                     agent_name=task.agent.role,
                     task_name=task.description[:50] + "...",

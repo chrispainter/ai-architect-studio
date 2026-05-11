@@ -43,6 +43,7 @@ def create_project(db: Session, project: schemas.ProjectCreate, user_id: int | N
         title=project.title,
         description=project.description,
         github_url=project.github_url,
+        discovery_enabled=project.discovery_enabled,
         user_id=user_id,
     )
     db.add(db_project)
