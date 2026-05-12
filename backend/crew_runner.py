@@ -67,17 +67,45 @@ class WebResearchTool(BaseTool):
     )
 
     def _run(self, query: str) -> str:
+        import time
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+        config = types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+        )
+
+        # Retry transient 5xx with exponential backoff. Gemini preview models
+        # frequently return 503 UNAVAILABLE during peak hours.
+        last_err: Exception | None = None
+        response = None
+        for attempt in range(5):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.1-pro-preview",
+                    contents=query,
+                    config=config,
+                )
+                break
+            except Exception as e:
+                last_err = e
+                msg = str(e)
+                is_transient = (
+                    "503" in msg or "UNAVAILABLE" in msg
+                    or "overloaded" in msg.lower() or "high demand" in msg.lower()
+                    or "RESOURCE_EXHAUSTED" in msg or "429" in msg
+                )
+                if not is_transient or attempt == 4:
+                    return f"Web research failed: {type(e).__name__}: {msg}"
+                backoff = min(2 ** attempt, 16)  # 1, 2, 4, 8, 16 seconds
+                print(f"[web-research] {type(e).__name__} on attempt {attempt + 1}; backing off {backoff}s")
+                time.sleep(backoff)
+
+        if response is None:
+            return f"Web research failed after retries: {last_err}"
+
         try:
-            from google import genai
-            from google.genai import types
-            client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-            response = client.models.generate_content(
-                model="gemini-3.1-pro-preview",
-                contents=query,
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                ),
-            )
             text = (response.text or "").strip() or "(no answer returned)"
             citations: list[str] = []
             try:
@@ -91,11 +119,10 @@ class WebResearchTool(BaseTool):
             except (AttributeError, IndexError):
                 pass
             if citations:
-                # Cap at 10 to keep tool output bounded
                 return f"{text}\n\nSources:\n" + "\n".join(citations[:10])
             return text
         except Exception as e:
-            return f"Web research failed: {type(e).__name__}: {str(e)}"
+            return f"Web research result parse failed: {type(e).__name__}: {str(e)}"
 
 
 def _enter_stitch_adapter(stack: ExitStack, settings) -> list:
@@ -242,6 +269,11 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             model="gemini/gemini-3.1-pro-preview",
             temperature=0.4,
             api_key=api_key,
+            # Auto-retry transient 5xx (e.g. 503 UNAVAILABLE — Gemini preview
+            # capacity spikes are common during peak hours). litellm uses
+            # exponential backoff between attempts.
+            num_retries=5,
+            timeout=120,
         )
 
         architect_tools = []
