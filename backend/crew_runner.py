@@ -175,7 +175,11 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
 
         # Setup Environment Variables
         os.environ["OPENAI_API_KEY"] = "fake-key-to-bypass-crewai-checks"
-        api_key = os.environ.get("GOOGLE_API_KEY")
+        api_key = os.environ.get("GOOGLE_API_KEY", "")
+        # Newer crewai's Chroma-backed memory checks this env var explicitly
+        # rather than reading from the embedder config dict.
+        if api_key and not os.environ.get("CHROMA_GOOGLE_GENAI_API_KEY"):
+            os.environ["CHROMA_GOOGLE_GENAI_API_KEY"] = api_key
         settings = get_settings()
 
         # Parse GitHub URL
