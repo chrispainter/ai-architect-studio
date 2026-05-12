@@ -266,7 +266,10 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
         else:
             github_repo = None
 
-        model_name = settings.gemini_model
+        # Per-project model selection wins, falls back to the server default.
+        model_name = (getattr(project, "llm_model", None) or "").strip() or settings.gemini_model
+        # WebResearchTool reads GEMINI_MODEL via env, so propagate for this run.
+        os.environ["GEMINI_MODEL"] = model_name
         gemini_llm = LLM(
             model=f"gemini/{model_name}",
             temperature=0.4,

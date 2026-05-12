@@ -123,6 +123,7 @@ class ProjectBase(BaseModel):
     description: Optional[str] = None
     github_url: Optional[str] = None
     discovery_enabled: bool = True
+    llm_model: Optional[str] = None
 
 
 class ProjectCreate(ProjectBase):
@@ -135,6 +136,7 @@ class ProjectUpdate(BaseModel):
     github_url: Optional[str] = None
     status: Optional[str] = None
     discovery_enabled: Optional[bool] = None
+    llm_model: Optional[str] = None
 
 
 class Project(ProjectBase):

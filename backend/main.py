@@ -36,6 +36,48 @@ def ping():
 
 
 # ============================================================
+# Models — /api/v1/models
+# ============================================================
+
+AVAILABLE_MODELS = [
+    {
+        "value": "gemini-2.5-pro",
+        "label": "Gemini 2.5 Pro",
+        "description": "Recommended default. Stable, high-quality reasoning, reliable capacity.",
+        "tier": "balanced",
+    },
+    {
+        "value": "gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash",
+        "description": "Faster and cheaper. Use for iteration or low-stakes runs. Lower reasoning ceiling.",
+        "tier": "fast",
+    },
+    {
+        "value": "gemini-3.1-pro-preview",
+        "label": "Gemini 3.1 Pro (preview)",
+        "description": "Best quality when available, but preview tier — frequently hits 503 capacity errors.",
+        "tier": "experimental",
+    },
+    {
+        "value": "gemini-3.1-flash-preview",
+        "label": "Gemini 3.1 Flash (preview)",
+        "description": "Newer fast model, preview tier. May also hit capacity issues.",
+        "tier": "experimental",
+    },
+]
+
+
+@app.get("/api/v1/models")
+def list_models():
+    from config import get_settings
+    settings = get_settings()
+    return {
+        "default": settings.gemini_model,
+        "models": AVAILABLE_MODELS,
+    }
+
+
+# ============================================================
 # Auth — /api/v1/auth
 # ============================================================
 

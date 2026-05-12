@@ -27,6 +27,7 @@ class Project(Base):
     github_url = Column(String, nullable=True)
     status = Column(String, default="draft")  # draft, running, completed, error
     discovery_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    llm_model = Column(String, nullable=True)  # null = use server default
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     owner = relationship("User", back_populates="projects")

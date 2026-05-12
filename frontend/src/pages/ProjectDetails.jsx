@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Save, CheckCircle } from 'lucide-react';
 import { api } from '../api';
+import ModelSelector from '../components/ModelSelector';
 
 export default function ProjectDetails() {
     const { id } = useParams();
@@ -96,6 +97,18 @@ export default function ProjectDetails() {
         }
     };
 
+    const handleModelChange = async (newModel) => {
+        const prev = project;
+        setProject(p => p ? { ...p, llm_model: newModel } : p);
+        try {
+            await api.put(`/api/v1/projects/${id}`, { llm_model: newModel });
+        } catch (error) {
+            console.error("Failed to update model", error);
+            setProject(prev);
+            alert("Couldn't update the model. Please try again.");
+        }
+    };
+
     if (!project) return <div>Loading...</div>;
 
     return (
@@ -117,7 +130,7 @@ export default function ProjectDetails() {
                 </div>
             </div>
 
-            <div className="glass-panel" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+            <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
                     <input
                         type="checkbox"
@@ -132,6 +145,13 @@ export default function ProjectDetails() {
                         </span>
                     </span>
                 </label>
+                <div>
+                    <ModelSelector
+                        value={project.llm_model || null}
+                        onChange={handleModelChange}
+                        label="LLM model"
+                    />
+                </div>
             </div>
 
             {/* Run History */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, FolderGit2, ArrowRight, Trash2 } from 'lucide-react';
 import { api } from '../api';
+import ModelSelector from '../components/ModelSelector';
 
 export default function ProjectDashboard() {
     const [projects, setProjects] = useState([]);
@@ -10,6 +11,7 @@ export default function ProjectDashboard() {
     const [newDesc, setNewDesc] = useState('');
     const [newGithub, setNewGithub] = useState('');
     const [newDiscoveryEnabled, setNewDiscoveryEnabled] = useState(true);
+    const [newLlmModel, setNewLlmModel] = useState(null);
 
     useEffect(() => {
         fetchProjects();
@@ -33,11 +35,13 @@ export default function ProjectDashboard() {
                 description: newDesc,
                 github_url: newGithub,
                 discovery_enabled: newDiscoveryEnabled,
+                llm_model: newLlmModel,
             });
             setNewTitle('');
             setNewDesc('');
             setNewGithub('');
             setNewDiscoveryEnabled(true);
+            setNewLlmModel(null);
             setIsCreating(false);
             fetchProjects();
         } catch (error) {
@@ -118,6 +122,14 @@ export default function ProjectDashboard() {
                                     </span>
                                 </span>
                             </label>
+                        </div>
+                        <div className="form-group">
+                            <ModelSelector
+                                value={newLlmModel}
+                                onChange={setNewLlmModel}
+                                label="LLM model"
+                                helpText="Used by every agent in the crew. You can change this later on the project details page."
+                            />
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button type="submit" className="btn btn-primary">Create Workspace</button>
