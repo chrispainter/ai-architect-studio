@@ -194,10 +194,23 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             crud.update_crew_run_status(db, crew_run_id, "running")
             _broadcast_sync(crew_run_id, {"type": "status", "status": "running"})
 
+        # Build the brief from the project's title + description + every
+        # appended `requirements` row. Earlier this only included the
+        # requirements rows, so projects whose intent lived in the description
+        # field (the common case) reached the researcher as "No specific
+        # requirements provided." and the agents hallucinated unrelated
+        # products.
         requirements_list = crud.get_requirements(db, project_id)
-        req_text = "\n\n".join([r.content for r in requirements_list])
-        if not req_text:
-            req_text = "No specific requirements provided."
+        brief_parts: list[str] = []
+        if project.title:
+            brief_parts.append(f"Product name: {project.title}")
+        if project.description:
+            brief_parts.append(f"Product description / goal:\n{project.description}")
+        if requirements_list:
+            joined_reqs = "\n\n".join(r.content for r in requirements_list if r.content)
+            if joined_reqs.strip():
+                brief_parts.append(f"Additional requirements / notes:\n{joined_reqs}")
+        req_text = "\n\n".join(brief_parts) if brief_parts else "No specific requirements provided."
 
         kb = crud.get_knowledge_base(db, project_id)
         pm_text = kb.pm_guidelines if kb and kb.pm_guidelines else "None provided."

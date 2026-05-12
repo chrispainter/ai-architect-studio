@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api';
 import DesignPreview from '../components/DesignPreview';
+import MarketResearchView from '../components/MarketResearchView';
 
 // In dev, Vite proxy forwards /ws to backend. In prod, nginx does the same.
 // So we connect relative to the current host.
@@ -188,6 +189,8 @@ export default function LiveTeamView() {
                             </div>
                             {output.artifact_type === 'stitch_design' ? (
                                 <DesignPreview output={output} />
+                            ) : output.artifact_type === 'market_research' ? (
+                                <MarketResearchView output={output} />
                             ) : (
                                 <div className="markdown-body">
                                     <ReactMarkdown>{output.output_content}</ReactMarkdown>
