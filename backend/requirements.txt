@@ -4,8 +4,11 @@ sqlalchemy>=2.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 crewai
-crewai-tools>=0.55.0
-mcp>=1.0.0
+# Use the [mcp] extras so crewai-tools brings in mcpadapt alongside mcp.
+# Without mcpadapt the MCPServerAdapter constructor flips MCP_AVAILABLE=False
+# and falls back to an interactive `click.confirm` prompt — which silently
+# fails in a non-interactive container, taking out Stitch.
+crewai-tools[mcp]>=0.55.0
 langchain-google-genai
 PyGithub
 google-generativeai
