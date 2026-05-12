@@ -147,6 +147,40 @@ def _broadcast_sync(run_id: int, message: dict):
         pass
 
 
+def _make_task_callback(db, project_id: int, crew_run_id: int | None,
+                        agent_role: str, task_label: str, artifact_type: str | None):
+    """Build a per-Task callback that persists + broadcasts each agent's output
+    the moment its task finishes, instead of waiting for the whole crew to
+    complete. Makes LiveTeamView actually live."""
+
+    def _cb(task_output):
+        try:
+            content = getattr(task_output, "raw", None) or str(task_output) or "No output"
+        except Exception:
+            content = "No output"
+        try:
+            output = schemas.AgentOutputCreate(
+                agent_name=agent_role,
+                task_name=task_label,
+                output_content=content,
+                artifact_type=artifact_type,
+            )
+            db_output = crud.create_agent_output(db, project_id, output, crew_run_id=crew_run_id)
+            if crew_run_id:
+                _broadcast_sync(crew_run_id, {
+                    "type": "agent_output",
+                    "agent_name": agent_role,
+                    "task_name": task_label,
+                    "output_content": content,
+                    "artifact_type": artifact_type,
+                    "output_id": db_output.id,
+                })
+        except Exception as e:
+            print(f"[task-callback] persist failed for {agent_role}: {type(e).__name__}: {e}")
+
+    return _cb
+
+
 def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
     db = SessionLocal()
     try:
@@ -303,6 +337,10 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                         "a citations list."
                     ),
                     agent=market_researcher,
+                    callback=_make_task_callback(
+                        db, project_id, crew_run_id,
+                        RESEARCHER_AGENT_ROLE, "Market discovery research", MARKET_RESEARCH_ARTIFACT_TYPE,
+                    ),
                 )
 
             # Build Agents
@@ -396,6 +434,10 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 description=pm_description,
                 expected_output=pm_expected,
                 agent=lead_product_manager,
+                callback=_make_task_callback(
+                    db, project_id, crew_run_id,
+                    lead_product_manager.role, "Decompose requirements", None,
+                ),
             )
 
             discovery_preamble = (
@@ -420,18 +462,30 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 description=architect_instruction,
                 expected_output=architect_output,
                 agent=lead_architect,
+                callback=_make_task_callback(
+                    db, project_id, crew_run_id,
+                    lead_architect.role, "Draft architecture", None,
+                ),
             )
 
             plan_infrastructure = Task(
                 description="Analyze the architecture drafted by the Lead Architect. Determine the necessary cloud resources (compute, databases, caching). Outline a deployment strategy.",
                 expected_output="A bulleted list of required infrastructure components and a step-by-step deployment guide.",
                 agent=systems_engineer,
+                callback=_make_task_callback(
+                    db, project_id, crew_run_id,
+                    systems_engineer.role, "Plan infrastructure", None,
+                ),
             )
 
             design_ai_features = Task(
                 description="Review the architecture and identify where LLMs or AI agents can provide the most value. Define the required prompts, data pipelines, and API integrations.",
                 expected_output="A detailed specification for the AI features, including suggested model choices and data flow diagrams.",
                 agent=ai_specialist,
+                callback=_make_task_callback(
+                    db, project_id, crew_run_id,
+                    ai_specialist.role, "Design AI features", None,
+                ),
             )
 
             if stitch_enabled:
@@ -463,71 +517,52 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 ux_description = "Critique the technical architecture from the end-user's perspective. Identify potential friction points. Suggest UI components and user flows that simplify complex interactions."
                 ux_expected = "A UX review document outlining potential usability issues in the architecture and concrete suggestions for an intuitive user interface layout and flow."
 
+            ux_artifact_type = STITCH_ARTIFACT_TYPE if stitch_enabled else None
             design_user_experience = Task(
                 description=ux_description,
                 expected_output=ux_expected,
                 agent=ux_designer,
+                callback=_make_task_callback(
+                    db, project_id, crew_run_id,
+                    UX_AGENT_ROLE, "Design user experience", ux_artifact_type,
+                ),
             )
 
             audit_security = Task(
                 description="Review the architecture, infrastructure plan, and AI design. Identify potential vulnerabilities, ensure proper data encryption strategies are implemented, and verify compliance with standard privacy regulations (e.g., GDPR/CCPA concepts).",
                 expected_output="A security audit report detailing identified risks and mandatory changes required to secure the architecture before deployment.",
                 agent=security_agent,
+                callback=_make_task_callback(
+                    db, project_id, crew_run_id,
+                    security_agent.role, "Audit security", None,
+                ),
             )
 
             # Start Execution
             crew_agents = [lead_product_manager, lead_architect, systems_engineer, ai_specialist, ux_designer, security_agent]
             crew_tasks = [deconstruct_requirements, draft_architecture, plan_infrastructure, design_ai_features, design_user_experience, audit_security]
             if discovery_enabled and market_researcher and market_research_task:
-                # Researcher runs first so PM + Architect can consume its output via memory
+                # Researcher runs first; PM + Architect read its output from the
+                # prior task's context (CrewAI passes raw outputs forward in
+                # Process.sequential even without memory enabled).
                 crew_agents.insert(0, market_researcher)
                 crew_tasks.insert(0, market_research_task)
 
+            # memory=False: avoids CrewAI's OpenAI-dependent memory analyzer,
+            # which was failing on 401s and adding minutes of retry latency per
+            # run. Sequential mode still passes prior task outputs forward.
             development_team = Crew(
                 agents=crew_agents,
                 tasks=crew_tasks,
                 process=Process.sequential,
-                memory=True,
-                embedder={
-                    "provider": "google-generativeai",
-                    "config": {
-                        "model": "models/embedding-001",
-                        "api_key": api_key,
-                    },
-                },
+                memory=False,
             )
 
-            # Kickoff
-            result = development_team.kickoff()
-
-            # Save Outputs to Database
-            for task in development_team.tasks:
-                output_content = task.output.raw if task.output else "No output"
-                role = task.agent.role
-                if stitch_enabled and role == UX_AGENT_ROLE:
-                    artifact_type = STITCH_ARTIFACT_TYPE
-                elif discovery_enabled and role == RESEARCHER_AGENT_ROLE:
-                    artifact_type = MARKET_RESEARCH_ARTIFACT_TYPE
-                else:
-                    artifact_type = None
-                output = schemas.AgentOutputCreate(
-                    agent_name=task.agent.role,
-                    task_name=task.description[:50] + "...",
-                    output_content=output_content,
-                    artifact_type=artifact_type,
-                )
-                db_output = crud.create_agent_output(db, project_id, output, crew_run_id=crew_run_id)
-
-                # Broadcast via WebSocket
-                if crew_run_id:
-                    _broadcast_sync(crew_run_id, {
-                        "type": "agent_output",
-                        "agent_name": task.agent.role,
-                        "task_name": task.description[:50] + "...",
-                        "output_content": output_content,
-                        "artifact_type": artifact_type,
-                        "output_id": db_output.id,
-                    })
+            # Kickoff. Per-task callbacks (attached above) persist + broadcast
+            # each agent's output the moment its task finishes, so LiveTeamView
+            # is actually live instead of getting everything in one burst at the
+            # end.
+            development_team.kickoff()
 
             crud.update_project_status(db, project_id, "completed")
             if crew_run_id:
