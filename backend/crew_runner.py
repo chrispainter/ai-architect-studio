@@ -75,6 +75,7 @@ class WebResearchTool(BaseTool):
         config = types.GenerateContentConfig(
             tools=[types.Tool(google_search=types.GoogleSearch())],
         )
+        model_name = os.environ.get("GEMINI_MODEL") or "gemini-2.5-pro"
 
         # Retry transient 5xx with exponential backoff. Gemini preview models
         # frequently return 503 UNAVAILABLE during peak hours.
@@ -83,7 +84,7 @@ class WebResearchTool(BaseTool):
         for attempt in range(5):
             try:
                 response = client.models.generate_content(
-                    model="gemini-3.1-pro-preview",
+                    model=model_name,
                     contents=query,
                     config=config,
                 )
@@ -265,13 +266,12 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
         else:
             github_repo = None
 
+        model_name = settings.gemini_model
         gemini_llm = LLM(
-            model="gemini/gemini-3.1-pro-preview",
+            model=f"gemini/{model_name}",
             temperature=0.4,
             api_key=api_key,
-            # Auto-retry transient 5xx (e.g. 503 UNAVAILABLE — Gemini preview
-            # capacity spikes are common during peak hours). litellm uses
-            # exponential backoff between attempts.
+            # Auto-retry transient 5xx. litellm uses exponential backoff.
             num_retries=5,
             timeout=120,
         )

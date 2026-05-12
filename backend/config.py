@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # Google / LLM
     google_api_key: str = ""
     github_personal_access_token: str = ""
+    # Default to the stable production model. gemini-3.1-pro-preview hits
+    # capacity spikes (frequent 503 UNAVAILABLE) and isn't reliable for
+    # multi-agent crews. Override via GEMINI_MODEL env var when needed.
+    gemini_model: str = "gemini-2.5-pro"
 
     # Stitch MCP (Phase 2)
     stitch_api_key: str = ""
