@@ -175,17 +175,23 @@ def _broadcast_sync(run_id: int, message: dict):
         pass
 
 
-def _make_task_callback(db, project_id: int, crew_run_id: int | None,
+def _make_task_callback(project_id: int, crew_run_id: int | None,
                         agent_role: str, task_label: str, artifact_type: str | None):
     """Build a per-Task callback that persists + broadcasts each agent's output
     the moment its task finishes, instead of waiting for the whole crew to
-    complete. Makes LiveTeamView actually live."""
+    complete. Makes LiveTeamView actually live.
+
+    Each callback opens its own short-lived SessionLocal() so it can't get
+    starved by the long-running crew session's connection state — the
+    persist+commit happens in milliseconds and the connection is released
+    immediately."""
 
     def _cb(task_output):
         try:
             content = getattr(task_output, "raw", None) or str(task_output) or "No output"
         except Exception:
             content = "No output"
+        local_db = SessionLocal()
         try:
             output = schemas.AgentOutputCreate(
                 agent_name=agent_role,
@@ -193,7 +199,7 @@ def _make_task_callback(db, project_id: int, crew_run_id: int | None,
                 output_content=content,
                 artifact_type=artifact_type,
             )
-            db_output = crud.create_agent_output(db, project_id, output, crew_run_id=crew_run_id)
+            db_output = crud.create_agent_output(local_db, project_id, output, crew_run_id=crew_run_id)
             if crew_run_id:
                 _broadcast_sync(crew_run_id, {
                     "type": "agent_output",
@@ -205,6 +211,8 @@ def _make_task_callback(db, project_id: int, crew_run_id: int | None,
                 })
         except Exception as e:
             print(f"[task-callback] persist failed for {agent_role}: {type(e).__name__}: {e}")
+        finally:
+            local_db.close()
 
     return _cb
 
@@ -386,7 +394,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                     ),
                     agent=market_researcher,
                     callback=_make_task_callback(
-                        db, project_id, crew_run_id,
+                        project_id, crew_run_id,
                         RESEARCHER_AGENT_ROLE, "Market discovery research", MARKET_RESEARCH_ARTIFACT_TYPE,
                     ),
                 )
@@ -483,7 +491,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 expected_output=pm_expected,
                 agent=lead_product_manager,
                 callback=_make_task_callback(
-                    db, project_id, crew_run_id,
+                    project_id, crew_run_id,
                     lead_product_manager.role, "Decompose requirements", None,
                 ),
             )
@@ -511,7 +519,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 expected_output=architect_output,
                 agent=lead_architect,
                 callback=_make_task_callback(
-                    db, project_id, crew_run_id,
+                    project_id, crew_run_id,
                     lead_architect.role, "Draft architecture", None,
                 ),
             )
@@ -521,7 +529,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 expected_output="A bulleted list of required infrastructure components and a step-by-step deployment guide.",
                 agent=systems_engineer,
                 callback=_make_task_callback(
-                    db, project_id, crew_run_id,
+                    project_id, crew_run_id,
                     systems_engineer.role, "Plan infrastructure", None,
                 ),
             )
@@ -531,7 +539,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 expected_output="A detailed specification for the AI features, including suggested model choices and data flow diagrams.",
                 agent=ai_specialist,
                 callback=_make_task_callback(
-                    db, project_id, crew_run_id,
+                    project_id, crew_run_id,
                     ai_specialist.role, "Design AI features", None,
                 ),
             )
@@ -571,7 +579,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 expected_output=ux_expected,
                 agent=ux_designer,
                 callback=_make_task_callback(
-                    db, project_id, crew_run_id,
+                    project_id, crew_run_id,
                     UX_AGENT_ROLE, "Design user experience", ux_artifact_type,
                 ),
             )
@@ -581,7 +589,7 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
                 expected_output="A security audit report detailing identified risks and mandatory changes required to secure the architecture before deployment.",
                 agent=security_agent,
                 callback=_make_task_callback(
-                    db, project_id, crew_run_id,
+                    project_id, crew_run_id,
                     security_agent.role, "Audit security", None,
                 ),
             )
@@ -611,6 +619,54 @@ def run_crew_for_project(project_id: int, crew_run_id: int | None = None):
             # is actually live instead of getting everything in one burst at the
             # end.
             development_team.kickoff()
+
+            # Safety net: re-persist any task outputs that didn't make it
+            # through the live callback (e.g. transient DB-pool issues).
+            # De-duped by agent_role since each agent runs at most once per
+            # crew. Uses a fresh session to be robust against pool starvation
+            # on the long-lived `db`.
+            safety_db = SessionLocal()
+            try:
+                already_persisted: set[str] = set()
+                if crew_run_id:
+                    try:
+                        existing = crud.get_agent_outputs_by_run(safety_db, crew_run_id)
+                        already_persisted = {o.agent_name for o in existing}
+                    except Exception as e:
+                        print(f"[safety-net] read existing outputs failed: {e}")
+                for task in development_team.tasks:
+                    role = task.agent.role
+                    if role in already_persisted:
+                        continue
+                    output_content = task.output.raw if task.output else "No output"
+                    if stitch_enabled and role == UX_AGENT_ROLE:
+                        artifact_type = STITCH_ARTIFACT_TYPE
+                    elif discovery_enabled and role == RESEARCHER_AGENT_ROLE:
+                        artifact_type = MARKET_RESEARCH_ARTIFACT_TYPE
+                    else:
+                        artifact_type = None
+                    try:
+                        output = schemas.AgentOutputCreate(
+                            agent_name=role,
+                            task_name=(task.description[:50] + "...") if task.description else "(task)",
+                            output_content=output_content,
+                            artifact_type=artifact_type,
+                        )
+                        db_output = crud.create_agent_output(safety_db, project_id, output, crew_run_id=crew_run_id)
+                        if crew_run_id:
+                            _broadcast_sync(crew_run_id, {
+                                "type": "agent_output",
+                                "agent_name": role,
+                                "task_name": output.task_name,
+                                "output_content": output_content,
+                                "artifact_type": artifact_type,
+                                "output_id": db_output.id,
+                            })
+                        print(f"[safety-net] recovered missing output for {role}")
+                    except Exception as e:
+                        print(f"[safety-net] failed to recover {role}: {type(e).__name__}: {e}")
+            finally:
+                safety_db.close()
 
             crud.update_project_status(db, project_id, "completed")
             if crew_run_id:
