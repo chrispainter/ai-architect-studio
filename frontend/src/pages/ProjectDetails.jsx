@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Save, CheckCircle } from 'lucide-react';
-import { api } from '../api';
+import { Play, Save, CheckCircle, Download } from 'lucide-react';
+import { api, downloadRunExport } from '../api';
 import ModelSelector from '../components/ModelSelector';
 
 export default function ProjectDetails() {
@@ -171,6 +171,19 @@ export default function ProjectDetails() {
                                         {run.started_at ? new Date(run.started_at).toLocaleString() : 'Queued'}
                                     </span>
                                     <span className={`badge badge-${run.status}`}>{run.status}</span>
+                                    {run.status === 'completed' && (
+                                        <button
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                try { await downloadRunExport(run.id); }
+                                                catch (err) { console.error('export failed', err); alert("Couldn't download. Try again."); }
+                                            }}
+                                            title="Download all agent outputs as a single .md file"
+                                            style={{ background: 'transparent', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', padding: '0.25rem', display: 'inline-flex', alignItems: 'center' }}
+                                        >
+                                            <Download size={16} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}

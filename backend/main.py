@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List
 
-import crud, models, schemas
+import crud, models, schemas, export
 from auth import verify_password, create_access_token, get_current_user
 from config import get_settings
 from database import SessionLocal, engine, get_db
@@ -268,6 +269,39 @@ def get_crew_run(
     if not db_project:
         raise HTTPException(status_code=404, detail="Run not found")
     return db_run
+
+
+@app.get("/api/v1/runs/{run_id}/export")
+def export_crew_run_markdown(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Download a crew run's outputs as a single, well-organized markdown
+    document — suitable for handing off to a coding agent (Claude Code,
+    Antigravity, etc.) as the initial project brief."""
+    db_run = crud.get_crew_run(db, run_id)
+    if not db_run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    db_project = crud.get_project(db, db_run.project_id, user_id=current_user.id)
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    outputs = crud.get_agent_outputs_by_run(db, run_id)
+    requirements = crud.get_requirements(db, db_project.id)
+    markdown = export.render_run_markdown(db_project, db_run, outputs, requirements)
+    filename = export.filename_for_run(db_project, db_run)
+
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # Expose Content-Disposition so the frontend can read the
+            # server-suggested filename when downloading via fetch.
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 # ============================================================

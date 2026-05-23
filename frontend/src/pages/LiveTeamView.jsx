@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { api } from '../api';
+import { api, downloadRunExport } from '../api';
 import DesignPreview from '../components/DesignPreview';
 import MarketResearchView from '../components/MarketResearchView';
 
@@ -150,11 +150,26 @@ export default function LiveTeamView() {
                         </h1>
                         {runId && <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Run #{runId}</p>}
                     </div>
-                    <div className={`badge badge-${isError ? 'error' : isComplete ? 'completed' : isActive ? 'running' : 'draft'}`} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
-                        {isActive && <RefreshCw size={14} className="spin" style={{ marginRight: '0.5rem', display: 'inline' }} />}
-                        {isComplete && <CheckCircle size={14} style={{ marginRight: '0.5rem', display: 'inline' }} />}
-                        {isError && <AlertCircle size={14} style={{ marginRight: '0.5rem', display: 'inline' }} />}
-                        Status: {(displayStatus || 'unknown').toUpperCase()}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {isComplete && runId && (
+                            <button
+                                onClick={async () => {
+                                    try { await downloadRunExport(runId); }
+                                    catch (e) { console.error('export failed', e); alert("Couldn't download. Try again or check the console."); }
+                                }}
+                                className="btn btn-secondary"
+                                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                                title="Download all agent outputs as a single .md file for handing off to Claude Code, Antigravity, or another coding agent"
+                            >
+                                <Download size={14} /> Export .md
+                            </button>
+                        )}
+                        <div className={`badge badge-${isError ? 'error' : isComplete ? 'completed' : isActive ? 'running' : 'draft'}`} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+                            {isActive && <RefreshCw size={14} className="spin" style={{ marginRight: '0.5rem', display: 'inline' }} />}
+                            {isComplete && <CheckCircle size={14} style={{ marginRight: '0.5rem', display: 'inline' }} />}
+                            {isError && <AlertCircle size={14} style={{ marginRight: '0.5rem', display: 'inline' }} />}
+                            Status: {(displayStatus || 'unknown').toUpperCase()}
+                        </div>
                     </div>
                 </div>
             </div>
